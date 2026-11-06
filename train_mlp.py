@@ -2,35 +2,53 @@
 
 The existing respondent-level train/validation/test splits are used directly:
 
+    python export_preprocessing.py   # writes TF-IDF block sizes used below
     python train_mlp.py search
     python train_mlp.py final
 
-Search fits preprocessing and models on train and uses validation for selection.
-Final refits on train+validation, evaluates test once, and exports a NumPy model
-that can be loaded by mlp_inference.py without PyTorch or scikit-learn.
+Feature pipeline variants (PCA and k-means fallbacks), each fit on training rows only:
+    clean features [+ one-hot k-means cluster IDs per free-text question]
+    -> standardize -> [PCA keeping a fraction of the variance] -> MLP
+
+Search runs the same two-stage random search over the project MLP grid for
+every pipeline variant, fitting on train and scoring on validation. Each
+configuration is scored by the mean validation macro-F1 of single MLPs trained
+with several seeds. Final refits the selected pipeline and a single MLP on
+train+validation, evaluates the test split once, and exports a NumPy archive
+loaded by pred.py without PyTorch or scikit-learn.
 """
 
 import argparse
 import itertools
 import json
+import os
 import random
 import time
+from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.metrics import (accuracy_score, classification_report,
                             confusion_matrix, f1_score)
 from sklearn.preprocessing import StandardScaler
 from torch import nn
 
+import pred
+
 SEED = 311
-ENSEMBLE_SEEDS = [1, 2, 3, 4, 5]
+# Seeds used to score each configuration on validation (results are averaged).
+SELECTION_SEEDS = [1, 2, 3, 4, 5]
+# Seed for the single submitted model; fixed before any test evaluation.
+FINAL_SEED = SEED
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "processed_data"
 OUTPUT_DIR = ROOT / "mlp_outputs"
+PREPROCESSING_PATH = OUTPUT_DIR / pred.PREPROCESSING_FILE
 BROAD_CONFIGS = 48
 NARROW_CONFIGS = 16
 TOP_K_FOR_NARROWING = 5
@@ -45,11 +63,21 @@ SEARCH_SPACE = {
     "l2": [0.001, 0.01, 0.1, 1.0],
     "patience": [1, 2, 5, 10],
 }
+# 0 means "off". PCA keeps enough components for this fraction of variance;
+# k-means adds k one-hot cluster indicators per free-text question.
+PCA_VARIANCE = [0.0, 0.80, 0.90, 0.95, 0.99]
+KMEANS_K = [0, 3, 5, 10]
+VARIANTS = [{"pca_variance": p, "kmeans_k": k}
+            for p in PCA_VARIANCE for k in KMEANS_K]
 ACTIVATIONS = {
     "relu": nn.ReLU,
     "leaky_relu": nn.LeakyReLU,
     "tanh": nn.Tanh,
 }
+# Ties prefer the plain pipeline, then the smaller network.
+SORT_COLUMNS = ["mean_seed_macro_f1", "mean_seed_accuracy", "kmeans_k",
+                "pca_variance", "hidden_layers", "hidden_width"]
+SORT_ASCENDING = [False, False, True, True, True, True]
 
 
 def load_split(data_dir, name):
@@ -61,12 +89,10 @@ def load_split(data_dir, name):
     features = frame.drop(columns="label")
     if features.empty or features.columns.has_duplicates:
         raise ValueError(f"{path} must have non-empty, uniquely named features.")
-    X = features.to_numpy(dtype=np.float32)
-    if not np.isfinite(X).all():
-        raise ValueError(f"{path} contains missing or non-finite feature values.")
+    X = features.to_numpy(dtype=np.float64)
+    if not len(X) or not np.isfinite(X).all():
+        raise ValueError(f"{path} contains no rows or non-finite feature values.")
     labels = frame["label"].astype(str).to_numpy()
-    if not len(labels) or not np.isfinite(X).all():
-        raise ValueError(f"{path} contains no usable observations.")
     return X, labels, features.columns.to_list()
 
 
@@ -90,39 +116,57 @@ def load_data(data_dir, include_test=False):
             train_columns, classes)
 
 
+def text_blocks(columns):
+    """Column indices of each free-text question's TF-IDF block, in order."""
+    if not PREPROCESSING_PATH.exists():
+        raise SystemExit("Run `python export_preprocessing.py` first.")
+    sizes = [len(block["vocabulary"]) for block in
+             json.loads(PREPROCESSING_PATH.read_text())["tfidf"]]
+    start = len(columns) - sum(sizes)
+    blocks = []
+    for size in sizes:
+        blocks.append(np.arange(start, start + size, dtype=np.int64))
+        start += size
+    if not all("_tfidf_" in columns[i] for block in blocks for i in block):
+        raise ValueError("TF-IDF blocks are not the trailing feature columns.")
+    return blocks
+
+
+def fit_pipeline(X, columns, variant):
+    """Fit k-means / scaler / PCA on X; return arrays in pred.py's format."""
+    k = int(variant["kmeans_k"])
+    pipeline = {"kmeans_k": np.asarray(k, dtype=np.int64),
+                "kmeans_n_blocks": np.asarray(0, dtype=np.int64)}
+    if k:
+        blocks = text_blocks(columns)
+        pipeline["kmeans_n_blocks"] = np.asarray(len(blocks), dtype=np.int64)
+        for index, block in enumerate(blocks):
+            kmeans = KMeans(n_clusters=k, n_init=10, random_state=SEED).fit(X[:, block])
+            pipeline[f"kmeans_columns_{index}"] = block
+            pipeline[f"kmeans_centroids_{index}"] = kmeans.cluster_centers_
+    expanded = pred.add_cluster_features(X, pipeline)
+    scaler = StandardScaler().fit(expanded)
+    pipeline["scaler_mean"] = scaler.mean_.astype(np.float64)
+    pipeline["scaler_scale"] = scaler.scale_.astype(np.float64)
+    pipeline["pca_n_components"] = np.asarray(0, dtype=np.int64)
+    if variant["pca_variance"]:
+        pca = PCA(n_components=float(variant["pca_variance"]), svd_solver="full")
+        pca.fit((expanded - pipeline["scaler_mean"]) / pipeline["scaler_scale"])
+        pipeline["pca_n_components"] = np.asarray(pca.n_components_, dtype=np.int64)
+        pipeline["pca_mean"] = pca.mean_.astype(np.float64)
+        pipeline["pca_components"] = pca.components_.astype(np.float64)
+    return pipeline
+
+
+def transform(X, pipeline):
+    """Apply the pipeline with the exact NumPy code pred.py uses."""
+    return pred.transform_features(X, pipeline).astype(np.float32)
+
+
 def to_tensors(X, y, classes):
     class_index = {name: index for index, name in enumerate(classes)}
     targets = np.asarray([class_index[label] for label in y], dtype=np.int64)
     return torch.from_numpy(np.asarray(X, dtype=np.float32)), torch.from_numpy(targets)
-
-
-def fit_feature_scaler(X, columns):
-    """Standardize the five continuous/ordinal survey features only.
-
-    Keeping binary, multi-hot, and TF-IDF features at their original scale
-    avoids inflating rare indicators by dividing them by a tiny standard
-    deviation.
-    """
-    structured = [
-        index for index, name in enumerate(columns)
-        if not name.endswith("_missing")
-        and not name.startswith(("location_", "season_", "music_"))
-        and "_tfidf_" not in name
-    ]
-    if len(structured) != 5:
-        raise ValueError(
-            f"Expected five continuous/ordinal features, found {len(structured)}."
-        )
-    scaler = StandardScaler().fit(X[:, structured])
-    means = np.zeros(X.shape[1], dtype=np.float64)
-    scales = np.ones(X.shape[1], dtype=np.float64)
-    means[structured] = scaler.mean_
-    scales[structured] = scaler.scale_
-    return means, scales
-
-
-def scale_features(X, means, scales):
-    return ((X - means) / scales).astype(np.float32)
 
 
 class MLP(nn.Module):
@@ -149,7 +193,9 @@ def train_model(train, validation, n_classes, config, seed=SEED,
     torch.manual_seed(seed)
     X_train, y_train = train
     model = MLP(X_train.shape[1], n_classes, config)
-    optimizer = torch.optim.AdamW(
+    # Plain mini-batch gradient descent (no momentum). SGD's weight_decay adds
+    # l2 * w to each gradient, i.e. an L2 penalty (l2 / 2) * ||w||^2 on the loss.
+    optimizer = torch.optim.SGD(
         model.parameters(), lr=config["learning_rate"],
         weight_decay=config["l2"],
     )
@@ -188,28 +234,27 @@ def train_model(train, validation, n_classes, config, seed=SEED,
                 if waiting >= config["patience"]:
                     break
             continue
-        break
+        break  # a mini-batch loss was non-finite
 
-    if validation is not None and best_state is None:
-        raise FloatingPointError("Training diverged before a valid checkpoint was found.")
-    if best_state is not None:
+    if validation is not None:
+        if best_state is None:
+            raise FloatingPointError("Training diverged before a valid checkpoint.")
         model.load_state_dict(best_state)
-    if best_epoch == 0:
-        raise FloatingPointError("Training did not complete a finite epoch.")
+    elif best_epoch != max_epochs:
+        raise FloatingPointError(
+            f"Fixed-epoch training diverged after {best_epoch}/{max_epochs} epochs."
+        )
     return model, best_epoch
 
 
-def predict_probabilities(models, X):
-    probabilities = []
+def predict_probabilities(model, X):
+    model.eval()
     with torch.no_grad():
-        for model in models:
-            model.eval()
-            probabilities.append(torch.softmax(model(X), dim=1).cpu().numpy())
-    return np.mean(probabilities, axis=0)
+        return torch.softmax(model(X), dim=1).cpu().numpy()
 
 
-def predict_indices(models, X):
-    return predict_probabilities(models, X).argmax(axis=1)
+def predict_indices(model, X):
+    return predict_probabilities(model, X).argmax(axis=1)
 
 
 def sample_configs(space, count, rng, seen):
@@ -227,107 +272,104 @@ def sample_configs(space, count, rng, seen):
     return chosen
 
 
-def evaluate_config(config, X_train, y_train, X_val, y_val, classes, columns):
-    means, scales = fit_feature_scaler(X_train, columns)
-    train = to_tensors(scale_features(X_train, means, scales), y_train, classes)
-    validation = to_tensors(scale_features(X_val, means, scales), y_val, classes)
-    models, epochs, individual_scores = [], [], []
+def evaluate_config(config, train, validation, n_classes):
+    """Train one MLP per selection seed; report mean/std validation scores."""
     truth = validation[1].numpy()
-    for seed in ENSEMBLE_SEEDS:
-        model, best_epoch = train_model(
-            train, validation, len(classes), config, seed=seed,
-        )
-        models.append(model)
+    epochs, accuracies, macro_f1s = [], [], []
+    for seed in SELECTION_SEEDS:
+        model, best_epoch = train_model(train, validation, n_classes, config, seed=seed)
+        predictions = predict_indices(model, validation[0])
         epochs.append(best_epoch)
-        individual_scores.append(
-            accuracy_score(truth, predict_indices([model], validation[0]))
-        )
-    predictions = predict_indices(models, validation[0])
+        accuracies.append(accuracy_score(truth, predictions))
+        macro_f1s.append(f1_score(truth, predictions, average="macro",
+                                  zero_division=0))
     return {
         **config,
         "best_epoch": int(np.median(epochs)),
-        "validation_accuracy": accuracy_score(truth, predictions),
-        "validation_macro_f1": f1_score(
-            truth, predictions, average="macro", zero_division=0
-        ),
-        "mean_seed_accuracy": float(np.mean(individual_scores)),
-        "std_seed_accuracy": float(np.std(individual_scores)),
+        "mean_seed_macro_f1": float(np.mean(macro_f1s)),
+        "std_seed_macro_f1": float(np.std(macro_f1s)),
+        "mean_seed_accuracy": float(np.mean(accuracies)),
+        "std_seed_accuracy": float(np.std(accuracies)),
+        "min_seed_accuracy": float(np.min(accuracies)),
+        "max_seed_accuracy": float(np.max(accuracies)),
     }
 
 
-def run_search(data_dir, output_dir, broad_count, narrow_count):
+def search_variant(args):
+    """Two-stage random search for one pipeline variant (validation only)."""
+    variant, data_dir, broad_count, narrow_count = args
+    torch.set_num_threads(1)
     X_train, y_train, X_val, y_val, _, _, columns, classes = load_data(data_dir)
-    rng = random.Random(SEED)
+    pipeline = fit_pipeline(X_train, columns, variant)
+    train = to_tensors(transform(X_train, pipeline), y_train, classes)
+    validation = to_tensors(transform(X_val, pipeline), y_val, classes)
+    rng = random.Random(SEED)  # same sampled configs for every variant
     seen = set()
-    started = time.monotonic()
     rows = []
 
-    broad = sample_configs(SEARCH_SPACE, broad_count, rng, seen)
-    for index, config in enumerate(broad, start=1):
-        try:
-            row = evaluate_config(
-                config, X_train, y_train, X_val, y_val, classes, columns,
-            )
-            row["stage"] = "broad"
-            rows.append(row)
-            print(
-                f"[broad {index}/{len(broad)}] "
-                f"macro-F1={row['validation_macro_f1']:.4f} "
-                f"accuracy={row['validation_accuracy']:.4f} "
-                f"epoch={row['best_epoch']} ({time.monotonic() - started:.0f}s)",
-                flush=True,
-            )
-        except FloatingPointError as error:
-            print(f"[broad {index}/{len(broad)}] skipped: {error}", flush=True)
+    def run_stage(name, configs):
+        for config in configs:
+            try:
+                row = evaluate_config(config, train, validation, len(classes))
+            except FloatingPointError:
+                continue
+            rows.append({**variant, "n_inputs": train[0].shape[1], **row,
+                         "stage": name})
 
+    run_stage("broad", sample_configs(SEARCH_SPACE, broad_count, rng, seen))
     if not rows:
-        raise RuntimeError("Every broad-search configuration diverged.")
-    top = sorted(
-        rows,
-        key=lambda row: (row["validation_macro_f1"],
-                         row["validation_accuracy"]),
-        reverse=True,
-    )[:TOP_K_FOR_NARROWING]
-    narrowed_space = {
-        key: sorted({row[key] for row in top}, key=str)
-        for key in SEARCH_SPACE
-    }
-    narrow = sample_configs(narrowed_space, narrow_count, rng, seen)
-    for index, config in enumerate(narrow, start=1):
-        try:
-            row = evaluate_config(
-                config, X_train, y_train, X_val, y_val, classes, columns,
-            )
-            row["stage"] = "narrow"
-            rows.append(row)
-            print(
-                f"[narrow {index}/{len(narrow)}] "
-                f"macro-F1={row['validation_macro_f1']:.4f} "
-                f"accuracy={row['validation_accuracy']:.4f} "
-                f"epoch={row['best_epoch']} ({time.monotonic() - started:.0f}s)",
-                flush=True,
-            )
-        except FloatingPointError as error:
-            print(f"[narrow {index}/{len(narrow)}] skipped: {error}", flush=True)
+        return rows
+    top = sorted(rows, key=lambda r: (r["mean_seed_macro_f1"],
+                                      r["mean_seed_accuracy"]),
+                 reverse=True)[:TOP_K_FOR_NARROWING]
+    narrowed = {key: sorted({r[key] for r in top}, key=str) for key in SEARCH_SPACE}
+    run_stage("narrow", sample_configs(narrowed, narrow_count, rng, seen))
+    best = max(rows, key=lambda r: (r["mean_seed_macro_f1"], r["mean_seed_accuracy"]))
+    print(f"variant pca={variant['pca_variance']} k={variant['kmeans_k']} "
+          f"inputs={rows[0]['n_inputs']}: best macro-F1="
+          f"{best['mean_seed_macro_f1']:.4f} accuracy={best['mean_seed_accuracy']:.4f}",
+          flush=True)
+    return rows
+
+
+def run_search(data_dir, output_dir, broad_count, narrow_count, workers):
+    _, _, _, _, _, _, columns, classes = load_data(data_dir)
+    started = time.monotonic()
+    tasks = [(variant, data_dir, broad_count, narrow_count) for variant in VARIANTS]
+    with Pool(workers) as pool:
+        rows = [row for result in pool.map(search_variant, tasks) for row in result]
+    if not rows:
+        raise RuntimeError("Every configuration diverged.")
+    print(f"Search finished in {time.monotonic() - started:.0f}s")
 
     results = pd.DataFrame(rows).sort_values(
-        ["validation_macro_f1", "validation_accuracy", "hidden_layers",
-         "hidden_width"],
-        ascending=[False, False, True, True],
-    ).reset_index(drop=True)
+        SORT_COLUMNS, ascending=SORT_ASCENDING).reset_index(drop=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     results.to_csv(output_dir / "mlp_validation_results.csv", index=False)
+    summary = results.groupby(["pca_variance", "kmeans_k"], sort=False).head(1)
+    summary = summary[["pca_variance", "kmeans_k", "n_inputs", "mean_seed_macro_f1",
+                       "mean_seed_accuracy", "std_seed_accuracy", *SEARCH_SPACE,
+                       "best_epoch"]].reset_index(drop=True)
+    summary.to_csv(output_dir / "mlp_variant_summary.csv", index=False)
+    print(summary.to_string())
+
     best = results.iloc[0]
     best_config = {
         key: (best[key].item() if isinstance(best[key], np.generic) else best[key])
-        for key in SEARCH_SPACE
+        for key in [*SEARCH_SPACE, "pca_variance", "kmeans_k"]
     }
-    best_config["final_epochs"] = int(best["best_epoch"])
-    best_config["validation_accuracy"] = float(best["validation_accuracy"])
-    best_config["validation_macro_f1"] = float(best["validation_macro_f1"])
-    best_config["n_features"] = len(columns)
-    best_config["classes"] = classes
-    best_config["feature_scaling"] = "structured_only"
+    best_config.update({
+        "optimizer": "sgd",
+        "final_epochs": int(best["best_epoch"]),
+        "final_seed": FINAL_SEED,
+        "selection_seeds": SELECTION_SEEDS,
+        "validation_mean_seed_macro_f1": float(best["mean_seed_macro_f1"]),
+        "validation_mean_seed_accuracy": float(best["mean_seed_accuracy"]),
+        "validation_std_seed_accuracy": float(best["std_seed_accuracy"]),
+        "n_features": len(columns),
+        "classes": classes,
+        "feature_scaling": "standard_all",
+    })
     (output_dir / "mlp_best_config.json").write_text(
         json.dumps(best_config, indent=2) + "\n"
     )
@@ -335,32 +377,19 @@ def run_search(data_dir, output_dir, broad_count, narrow_count):
     print(json.dumps(best_config, indent=2))
 
 
-def export_numpy_model(models, means, scales, columns, classes, activation, output_path):
+def export_numpy_model(model, pipeline, columns, classes, activation, output_path):
     """Write all inference parameters in a non-pickled NumPy archive."""
+    linear_layers = [layer for layer in model.net if isinstance(layer, nn.Linear)]
     arrays = {
-        "scaler_mean": means,
-        "scaler_scale": scales,
+        **pipeline,
         "feature_names": np.asarray(columns, dtype=np.str_),
         "classes": np.asarray(classes, dtype=np.str_),
         "activation": np.asarray(activation, dtype=np.str_),
+        "n_layers": np.asarray(len(linear_layers), dtype=np.int64),
     }
-    arrays["n_models"] = np.asarray(len(models), dtype=np.int64)
-    linear_layers = [
-        [layer for layer in model.net if isinstance(layer, nn.Linear)]
-        for model in models
-    ]
-    n_layers = len(linear_layers[0])
-    if any(len(layers) != n_layers for layers in linear_layers):
-        raise ValueError("Ensemble members must have matching architectures.")
-    arrays["n_layers"] = np.asarray(n_layers, dtype=np.int64)
-    for model_index, layers in enumerate(linear_layers):
-        for layer_index, layer in enumerate(layers):
-            arrays[f"weight_{model_index}_{layer_index}"] = (
-                layer.weight.detach().cpu().numpy().copy()
-            )
-            arrays[f"bias_{model_index}_{layer_index}"] = (
-                layer.bias.detach().cpu().numpy().copy()
-            )
+    for index, layer in enumerate(linear_layers):
+        arrays[f"weight_{index}"] = layer.weight.detach().cpu().numpy().copy()
+        arrays[f"bias_{index}"] = layer.bias.detach().cpu().numpy().copy()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(output_path, **arrays)
 
@@ -381,44 +410,32 @@ def run_final(data_dir, output_dir):
     )
     if config["n_features"] != len(columns) or config["classes"] != classes:
         raise ValueError("The saved search configuration does not match the loaded data.")
-    if config["feature_scaling"] != "structured_only":
-        raise ValueError("The saved search configuration uses unsupported feature scaling.")
+    if "kmeans_k" not in config or config["optimizer"] != "sgd":
+        raise ValueError("The saved search configuration is from an older procedure.")
 
+    # Retrain on train+validation; the pipeline is refit on the same rows.
     development_X = np.vstack((train_X, val_X))
     development_y = np.concatenate((train_y, val_y))
-    means, scales = fit_feature_scaler(development_X, columns)
-    train = to_tensors(
-        scale_features(development_X, means, scales), development_y, classes
+    pipeline = fit_pipeline(development_X, columns, config)
+    train = to_tensors(transform(development_X, pipeline), development_y, classes)
+    model, _ = train_model(
+        train, None, len(classes), config, seed=int(config["final_seed"]),
+        fixed_epochs=int(config["final_epochs"]),
     )
-    models = [
-        train_model(
-            train, None, len(classes), config, seed=seed,
-            fixed_epochs=int(config["final_epochs"]),
-        )[0]
-        for seed in ENSEMBLE_SEEDS
-    ]
 
     model_path = output_dir / "mlp_model.npz"
-    export_numpy_model(
-        models, means, scales, columns, classes, config["activation"], model_path
-    )
+    export_numpy_model(model, pipeline, columns, classes, config["activation"],
+                       model_path)
 
-    # Confirm the standalone NumPy inference path matches the trained model
-    # before the one-time test evaluation.
-    from mlp_inference import predict_proba
-
-    val_frame = pd.read_csv(Path(data_dir) / "val_clean.csv").drop(columns="label")
-    sample = val_frame.iloc[:min(8, len(val_frame))]
-    numpy_probabilities = predict_proba(sample, model_path)
-    validation_sample = torch.from_numpy(
-        scale_features(sample.to_numpy(dtype=np.float32), means, scales)
-    )
-    torch_probabilities = predict_probabilities(models, validation_sample)
-    if not np.allclose(numpy_probabilities, torch_probabilities, atol=1e-6):
+    # Confirm the NumPy forward pass in pred.py matches PyTorch before the
+    # one-time test evaluation (uses validation features only).
+    numpy_probabilities = pred.predict_proba_features(val_X, model_path)
+    torch_probabilities = predict_probabilities(
+        model, torch.from_numpy(transform(val_X, pipeline)))
+    if not np.allclose(numpy_probabilities, torch_probabilities, atol=1e-5):
         raise RuntimeError("Exported NumPy inference does not match the trained model.")
 
-    test_features = to_tensors(scale_features(test_X, means, scales), test_y, classes)[0]
-    predictions = predict_indices(models, test_features)
+    predictions = predict_indices(model, torch.from_numpy(transform(test_X, pipeline)))
     truth = np.asarray([classes.index(label) for label in test_y])
     accuracy = accuracy_score(truth, predictions)
     results = {
@@ -431,11 +448,13 @@ def run_final(data_dir, output_dir):
         "confusion_matrix": confusion_matrix(
             truth, predictions, labels=np.arange(len(classes))
         ).tolist(),
-        "validation_accuracy": config["validation_accuracy"],
-        "validation_macro_f1": config["validation_macro_f1"],
+        "classification_report": classification_report(
+            truth, predictions, labels=np.arange(len(classes)),
+            target_names=classes, output_dict=True, zero_division=0,
+        ),
         "test_rows": len(test_y),
-        "ensemble_seeds": ENSEMBLE_SEEDS,
-        "feature_scaling": config["feature_scaling"],
+        "n_inputs": int(train[0].shape[1]),
+        "config": config,
     }
     results_path.write_text(json.dumps(results, indent=2) + "\n")
     print(classification_report(
@@ -457,8 +476,10 @@ def main():
     search.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     search.add_argument("--broad", type=int, default=BROAD_CONFIGS)
     search.add_argument("--narrow", type=int, default=NARROW_CONFIGS)
+    search.add_argument("--workers", type=int,
+                        default=max(1, min(len(VARIANTS), (os.cpu_count() or 2) - 1)))
     search.set_defaults(run=lambda args: run_search(
-        args.data_dir, args.output_dir, args.broad, args.narrow
+        args.data_dir, args.output_dir, args.broad, args.narrow, args.workers
     ))
     final = commands.add_parser("final", help="refit, test once, and export inference model")
     final.add_argument("--data-dir", type=Path, default=DATA_DIR)

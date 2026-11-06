@@ -1,20 +1,32 @@
 {
-  "hidden_layers": 3,
-  "hidden_width": 64,
-  "activation": "leaky_relu",
-  "learning_rate": 0.001,
-  "batch_size": 32,
+  "hidden_layers": 2,
+  "hidden_width": 16,
+  "activation": "tanh",
+  "learning_rate": 0.2,
+  "batch_size": 64,
   "max_epochs": 250,
   "l2": 0.01,
-  "patience": 10,
-  "final_epochs": 7,
-  "validation_accuracy": 0.9767441860465116,
-  "validation_macro_f1": 0.9767379679144385,
+  "patience": 2,
+  "pca_variance": 0.8,
+  "kmeans_k": 10,
+  "optimizer": "sgd",
+  "final_epochs": 8,
+  "final_seed": 311,
+  "selection_seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "validation_mean_seed_macro_f1": 0.972064873985343,
+  "validation_mean_seed_accuracy": 0.9720930232558139,
+  "validation_std_seed_accuracy": 0.0037976585159429184,
   "n_features": 234,
   "classes": [
     "Baseball",
     "Basketball",
     "Soccer"
   ],
-  "feature_scaling": "structured_only"
+  "feature_scaling": "standard_all"
 }

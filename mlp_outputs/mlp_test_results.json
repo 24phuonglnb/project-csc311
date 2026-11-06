@@ -1,7 +1,7 @@
 {
-  "accuracy": 0.9166666666666666,
-  "macro_f1": 0.9171600474272666,
-  "weighted_f1": 0.9171600474272668,
+  "accuracy": 0.8939393939393939,
+  "macro_f1": 0.893671412567711,
+  "weighted_f1": 0.893671412567711,
   "classes": [
     "Baseball",
     "Basketball",
@@ -9,30 +9,86 @@
   ],
   "confusion_matrix": [
     [
-      41,
-      2,
-      1
+      39,
+      3,
+      2
     ],
     [
       2,
-      41,
-      1
+      42,
+      0
     ],
     [
-      5,
-      0,
-      39
+      4,
+      3,
+      37
     ]
   ],
-  "validation_accuracy": 0.9767441860465116,
-  "validation_macro_f1": 0.9767379679144385,
+  "classification_report": {
+    "Baseball": {
+      "precision": 0.8666666666666667,
+      "recall": 0.8863636363636364,
+      "f1-score": 0.8764044943820225,
+      "support": 44.0
+    },
+    "Basketball": {
+      "precision": 0.875,
+      "recall": 0.9545454545454546,
+      "f1-score": 0.9130434782608695,
+      "support": 44.0
+    },
+    "Soccer": {
+      "precision": 0.9487179487179487,
+      "recall": 0.8409090909090909,
+      "f1-score": 0.891566265060241,
+      "support": 44.0
+    },
+    "accuracy": 0.8939393939393939,
+    "macro avg": {
+      "precision": 0.8967948717948717,
+      "recall": 0.8939393939393939,
+      "f1-score": 0.893671412567711,
+      "support": 132.0
+    },
+    "weighted avg": {
+      "precision": 0.8967948717948718,
+      "recall": 0.8939393939393939,
+      "f1-score": 0.893671412567711,
+      "support": 132.0
+    }
+  },
   "test_rows": 132,
-  "ensemble_seeds": [
-    1,
-    2,
-    3,
-    4,
-    5
-  ],
-  "feature_scaling": "structured_only"
+  "n_inputs": 105,
+  "config": {
+    "hidden_layers": 2,
+    "hidden_width": 16,
+    "activation": "tanh",
+    "learning_rate": 0.2,
+    "batch_size": 64,
+    "max_epochs": 250,
+    "l2": 0.01,
+    "patience": 2,
+    "pca_variance": 0.8,
+    "kmeans_k": 10,
+    "optimizer": "sgd",
+    "final_epochs": 8,
+    "final_seed": 311,
+    "selection_seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "validation_mean_seed_macro_f1": 0.972064873985343,
+    "validation_mean_seed_accuracy": 0.9720930232558139,
+    "validation_std_seed_accuracy": 0.0037976585159429184,
+    "n_features": 234,
+    "classes": [
+      "Baseball",
+      "Basketball",
+      "Soccer"
+    ],
+    "feature_scaling": "standard_all"
+  }
 }
