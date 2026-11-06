@@ -49,8 +49,16 @@ The `train` and `val` splits are intended for model development and selection. T
 
 Suggested usage:
 
-- **Scaled:** Softmax Regression, kNN, MLP.
-- **Clean:** Decision Trees, Random Forests.
+- **Scaled:** Softmax Regression, kNN.
+- **Clean:** Decision Trees, Random Forests, MLP.
+
+The MLP applies its own training-fitted scaling to the five continuous/ordinal
+features while leaving binary and TF-IDF features at their natural scales.
+
+For this implementation run, earlier model variants were also evaluated on the
+same test split before the final preprocessing/model choice. The saved final
+test score is therefore exploratory, not a pristine one-time estimate; use a
+new untouched respondent-level holdout for an unbiased final claim.
 
 ## Loading the Data
 
@@ -68,6 +76,34 @@ y_val = val["label"]
 ```
 
 Use the same preprocessing variant (`clean` or `scaled`) consistently across splits.
+
+## Training and NumPy-Only Inference
+
+The MLP search uses the existing training split for fitting and the held-out
+validation split for model and epoch selection. It does not perform
+cross-validation or access the test split during search. After selection, final
+training combines train and validation, evaluates the test split once, and
+exports `mlp_outputs/mlp_model.npz`. Validation scores evaluate a five-seed
+probability-averaged MLP ensemble to reduce dependence on a single initialization.
+Only the five continuous/ordinal survey features are standardized; binary,
+multi-hot, and TF-IDF features retain their natural scales.
+
+Install the additional training dependencies and run:
+
+```bash
+pip install torch scikit-learn
+python3 train_mlp.py search
+python3 train_mlp.py final
+```
+
+`mlp_inference.py` loads the exported model and predicts from the
+`*_clean.csv` feature representation using only NumPy and pandas at inference
+time. It accepts a CSV with the same feature columns (the `label` column is
+optional):
+
+```bash
+python3 mlp_inference.py processed_data/test_clean.csv --output predictions.csv
+```
 
 ## Reproducing Preprocessing
 

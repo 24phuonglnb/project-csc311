@@ -1,0 +1,38 @@
+{
+  "accuracy": 0.9166666666666666,
+  "macro_f1": 0.9171600474272666,
+  "weighted_f1": 0.9171600474272668,
+  "classes": [
+    "Baseball",
+    "Basketball",
+    "Soccer"
+  ],
+  "confusion_matrix": [
+    [
+      41,
+      2,
+      1
+    ],
+    [
+      2,
+      41,
+      1
+    ],
+    [
+      5,
+      0,
+      39
+    ]
+  ],
+  "validation_accuracy": 0.9767441860465116,
+  "validation_macro_f1": 0.9767379679144385,
+  "test_rows": 132,
+  "ensemble_seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "feature_scaling": "structured_only"
+}

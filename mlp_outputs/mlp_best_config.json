@@ -1,0 +1,20 @@
+{
+  "hidden_layers": 3,
+  "hidden_width": 64,
+  "activation": "leaky_relu",
+  "learning_rate": 0.001,
+  "batch_size": 32,
+  "max_epochs": 250,
+  "l2": 0.01,
+  "patience": 10,
+  "final_epochs": 7,
+  "validation_accuracy": 0.9767441860465116,
+  "validation_macro_f1": 0.9767379679144385,
+  "n_features": 234,
+  "classes": [
+    "Baseball",
+    "Basketball",
+    "Soccer"
+  ],
+  "feature_scaling": "structured_only"
+}
