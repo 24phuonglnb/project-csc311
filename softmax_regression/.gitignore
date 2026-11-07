@@ -1,0 +1,8 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Training logs (regenerated on each run)
+results/train_log.txt
+results/overfitting_analysis.txt

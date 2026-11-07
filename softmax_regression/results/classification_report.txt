@@ -1,0 +1,14 @@
+Best epoch: 3
+Actual stop epoch: 5
+Validation accuracy: 0.9612
+Validation macro-F1: 0.9611
+
+              precision    recall  f1-score   support
+
+    Baseball     0.9762    0.9535    0.9647        43
+  Basketball     0.9348    1.0000    0.9663        43
+      Soccer     0.9756    0.9302    0.9524        43
+
+    accuracy                         0.9612       129
+   macro avg     0.9622    0.9612    0.9611       129
+weighted avg     0.9622    0.9612    0.9611       129
