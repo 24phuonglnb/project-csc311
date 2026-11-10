@@ -1,0 +1,14 @@
+Decision Tree - Internal Test-Set Evaluation
+
+Test accuracy : 0.8182
+Test macro-F1 : 0.8174
+
+              precision    recall  f1-score   support
+
+    Baseball     0.8140    0.7955    0.8046        44
+  Basketball     0.7368    0.9545    0.8317        44
+      Soccer     0.9688    0.7045    0.8158        44
+
+    accuracy                         0.8182       132
+   macro avg     0.8398    0.8182    0.8174       132
+weighted avg     0.8398    0.8182    0.8174       132
