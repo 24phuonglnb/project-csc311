@@ -1,0 +1,16 @@
+{
+  "hyperparameters": {
+    "n_classes": 3,
+    "learning_rate": 0.2,
+    "batch_size": 128,
+    "max_epochs": 100,
+    "l2_lambda": 1.0,
+    "patience": 2,
+    "random_state": 42
+  },
+  "training_summary": {
+    "best_epoch": 2,
+    "actual_stop_epoch": 4,
+    "best_val_loss": 0.4565143102174954
+  }
+}

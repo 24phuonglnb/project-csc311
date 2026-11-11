@@ -1,0 +1,15 @@
+{
+  "config_idx": 4,
+  "learning_rate": 0.2,
+  "batch_size": 128,
+  "max_epochs": 100,
+  "l2_lambda": 1.0,
+  "patience": 2,
+  "best_epoch": 2,
+  "actual_stop_epoch": 4,
+  "best_train_loss": 0.6794062455805263,
+  "best_val_loss": 0.4565143102174954,
+  "val_accuracy": 0.9612403100775194,
+  "val_macro_f1": 0.9611263231884514,
+  "runtime_s": 0.0019587078131735325
+}

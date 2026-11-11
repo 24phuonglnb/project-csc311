@@ -1,0 +1,14 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated plots (reproducible from artifacts; not needed in Git)
+results/*.png
+
+# Large prediction dumps and development-only outputs
+results/test_predictions.csv
+results/overfitting_analysis.txt
+
+# Training logs (regenerated on each run)
+results/train_log.txt

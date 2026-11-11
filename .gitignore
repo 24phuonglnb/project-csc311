@@ -1,6 +1,13 @@
 .DS_Store
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 venv/
 .env
+
+# Softmax Regression — generated outputs not tracked in Git
+softmax_regression/results/*.png
+softmax_regression/results/test_predictions.csv
+softmax_regression/results/overfitting_analysis.txt
+softmax_regression/results/train_log.txt
