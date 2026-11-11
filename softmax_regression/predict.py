@@ -34,7 +34,7 @@ import pandas as pd
 
 # Paths
 SCRIPT_DIR   = Path(__file__).resolve().parent
-ARTIFACT_DIR = SCRIPT_DIR / "artifacts"
+ARTIFACT_DIR = SCRIPT_DIR / "artifacts_final"
 PRE_DIR      = ARTIFACT_DIR / "preprocessing"
 
 

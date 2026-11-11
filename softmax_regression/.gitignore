@@ -8,6 +8,7 @@ results/*.png
 
 # Large prediction dumps and development-only outputs
 results/test_predictions.csv
+results/final_test_predictions.csv
 results/overfitting_analysis.txt
 
 # Training logs (regenerated on each run)

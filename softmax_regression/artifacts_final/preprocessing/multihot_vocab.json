@@ -1,0 +1,29 @@
+{
+  "location": [
+    "At home or nearby",
+    "Community recreation facility",
+    "Indoor facility",
+    "Others",
+    "Outdoor public space",
+    "Private sports facility",
+    "School or university facility"
+  ],
+  "season": [
+    "Fall",
+    "Spring",
+    "Summer",
+    "Winter"
+  ],
+  "music": [
+    "Classical or jazz",
+    "Country",
+    "Electronic or dance",
+    "Folk or traditional",
+    "Hip-hop or rap",
+    "Latin",
+    "No particular type",
+    "Other",
+    "Pop",
+    "Rock"
+  ]
+}

@@ -1,0 +1,28 @@
+Softmax Regression — Final Test-Set Evaluation (Retrained on Train+Val)
+======================================================================
+
+Model artifact        : softmax_regression/artifacts_final
+Test dataset          : processed_data/test_scaled.csv
+Training data         : Train + Val (738 observations)
+Final training epochs : 3 (= tuning best_epoch 3, 1-indexed)
+
+Hyperparameters (unchanged from tuning):
+  learning_rate = 0.2
+  batch_size    = 128
+  l2_lambda     = 1.0
+  random_seed   = 42
+
+Test accuracy        : 0.8788
+Test macro-F1        : 0.8796
+Test weighted-F1     : 0.8796
+Test cross-entropy   : 0.563969
+
+              precision    recall  f1-score   support
+
+    Baseball     0.8298    0.8864    0.8571        44
+  Basketball     0.8511    0.9091    0.8791        44
+      Soccer     0.9737    0.8409    0.9024        44
+
+    accuracy                         0.8788       132
+   macro avg     0.8848    0.8788    0.8796       132
+weighted avg     0.8848    0.8788    0.8796       132
