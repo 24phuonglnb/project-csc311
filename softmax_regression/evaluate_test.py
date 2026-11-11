@@ -1,14 +1,15 @@
-"""evaluate_test.py - Final test-set evaluation for the best Softmax model.
+"""evaluate_test.py — Test-set evaluation for the final retrained Softmax model.
 
 Usage (from project root):
     python3 softmax_regression/evaluate_test.py
 
-Loads the saved best model from softmax_regression/artifacts/ and evaluates it
-exactly once on processed_data/test_scaled.csv. Produces:
-  - Test classification report (text)
-  - Test metrics summary (JSON)
-  - Test confusion matrix heatmap (PNG)
-  - Test predictions with class probabilities (CSV)
+Loads the final model from softmax_regression/artifacts_final/ (the model
+retrained on Train+Val by retrain_final.py) and evaluates it exactly once on
+processed_data/test_scaled.csv.  Produces:
+  - final_test_classification_report.txt
+  - final_test_metrics.json
+  - final_test_confusion_matrix.png
+  - final_test_predictions.csv
 
 Does NOT retrain, tune, or modify the model in any way.
 """
@@ -37,7 +38,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "softmax_regression"))
 from softmax_model import SoftmaxRegression
 
 DATA_DIR     = PROJECT_ROOT / "processed_data"
-ARTIFACT_DIR = PROJECT_ROOT / "softmax_regression" / "artifacts"
+ARTIFACT_DIR = PROJECT_ROOT / "softmax_regression" / "artifacts_final"
 RESULTS_DIR  = PROJECT_ROOT / "softmax_regression" / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -83,7 +84,7 @@ def plot_confusion_matrix(
     ax.set_yticklabels(classes, fontsize=11)
     ax.set_xlabel("Predicted label", fontsize=12)
     ax.set_ylabel("True label", fontsize=12)
-    ax.set_title("Softmax Regression - Confusion Matrix (Test)", fontsize=13)
+    ax.set_title("Softmax Regression — Confusion Matrix (Test, Final Model)", fontsize=12)
 
     thresh = cm.max() / 2.0
     for i in range(len(classes)):
@@ -100,9 +101,9 @@ def plot_confusion_matrix(
 
 
 def main():
-    print("Softmax Regression - Final Test-Set Evaluation")
+    print("Softmax Regression — Final Test-Set Evaluation (Retrained Model)")
 
-    # Load model (read-only - no retraining)
+    # Load final model (read-only — no retraining)
     model = SoftmaxRegression.load(ARTIFACT_DIR)
     print(f"\nModel loaded from: {ARTIFACT_DIR}")
     print(f"  Best epoch (0-indexed) : {model.best_epoch_}  (epoch {model.best_epoch_ + 1})")
@@ -146,11 +147,11 @@ def main():
 
 
     # Save: classification report (text)
-    report_path = RESULTS_DIR / "test_classification_report.txt"
+    report_path = RESULTS_DIR / "final_test_classification_report.txt"
     with open(report_path, "w") as f:
-        f.write("Softmax Regression - Final Test-Set Evaluation\n")
-        f.write("\n\n")
-        f.write("Model artifact : softmax_regression/artifacts\n")
+        f.write("Softmax Regression — Final Test-Set Evaluation (Retrained on Train+Val)\n")
+        f.write("=" * 70 + "\n\n")
+        f.write("Model artifact : softmax_regression/artifacts_final\n")
         f.write("Test dataset   : processed_data/test_scaled.csv\n\n")
         f.write(f"Best epoch (0-indexed) : {model.best_epoch_}  (epoch {model.best_epoch_ + 1})\n\n")
         f.write(f"Test accuracy    : {test_acc:.4f}\n")
@@ -164,7 +165,7 @@ def main():
         "dataset": "test_scaled.csv",
         "n_observations": int(X_test.shape[0]),
         "n_features": int(X_test.shape[1]),
-        "model_artifact": "softmax_regression/artifacts",
+        "model_artifact": "softmax_regression/artifacts_final",
         "best_epoch": int(model.best_epoch_),
         "hyperparameters": {
             "learning_rate": model.learning_rate,
@@ -194,14 +195,14 @@ def main():
             "support":   support,
         }
 
-    metrics_path = RESULTS_DIR / "test_metrics.json"
+    metrics_path = RESULTS_DIR / "final_test_metrics.json"
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=2)
     print(f"Saved test metrics: {metrics_path}")
 
     # Save: confusion matrix PNG
     plot_confusion_matrix(y_test_labels, y_pred_labels, classes,
-                          RESULTS_DIR / "test_confusion_matrix.png")
+                          RESULTS_DIR / "final_test_confusion_matrix.png")
 
     # Save: predictions CSV
     preds_df = pd.DataFrame({
@@ -209,7 +210,7 @@ def main():
         "predicted_label": y_pred_labels,
         **{f"prob_{c}": proba[:, i] for i, c in enumerate(classes)},
     })
-    preds_path = RESULTS_DIR / "test_predictions.csv"
+    preds_path = RESULTS_DIR / "final_test_predictions.csv"
     preds_df.to_csv(preds_path, index=False)
     print(f"Saved test predictions: {preds_path}")
 

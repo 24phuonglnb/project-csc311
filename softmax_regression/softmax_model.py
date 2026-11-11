@@ -227,6 +227,67 @@ class SoftmaxRegression:
         return self
 
 
+    def fit_fixed_epochs(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        n_epochs: int,
+        classes: Optional[np.ndarray] = None,
+    ) -> "SoftmaxRegression":
+        """Train for exactly n_epochs with no early stopping or validation split.
+
+        Used for final retraining on Train+Val combined, where the target epoch
+        count was determined by the best_epoch_ from the validation-based search.
+        Initialises weights from scratch using the same seed as fit().
+
+        Parameters
+        X        : (N, D) feature matrix (combined train+val).
+        y        : (N,) integer labels in {0, ..., K-1}.
+        n_epochs : exact number of epochs to run.
+        classes  : optional array of original class-name strings.
+
+        Returns
+        self
+        """
+        rng = np.random.default_rng(self.random_state)
+        D = X.shape[1]
+        K = self.n_classes
+
+        scale = np.sqrt(2.0 / (D + K))
+        self.W = rng.standard_normal((D, K)) * scale
+        self.b = np.zeros(K)
+        self.classes_ = classes
+
+        self.train_losses_ = []
+        self.train_ce_losses_ = []
+        self.val_losses_ = []   # empty; no val split in final training
+        self.best_epoch_ = n_epochs - 1   # weights at the last epoch are kept
+
+        N = len(y)
+
+        for epoch in range(n_epochs):
+            perm = rng.permutation(N)
+            X_shuf = X[perm]
+            y_shuf = y[perm]
+
+            for start in range(0, N, self.batch_size):
+                end = min(start + self.batch_size, N)
+                Xb = X_shuf[start:end]
+                yb = y_shuf[start:end]
+                Pb = softmax(Xb @ self.W + self.b)
+                dW, db = self._gradients(Xb, Pb, yb)
+                self.W -= self.learning_rate * dW
+                self.b -= self.learning_rate * db
+
+            P_train = self._predict_proba_raw(X)
+            train_ce = cross_entropy_loss(P_train, y)
+            train_loss = train_ce + (self.l2_lambda / 2.0) * np.sum(self.W ** 2)
+            self.train_losses_.append(train_loss)
+            self.train_ce_losses_.append(train_ce)
+
+        return self
+
+
     # Inference
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """Return (N, K) class probability matrix"""

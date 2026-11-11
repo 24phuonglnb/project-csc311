@@ -1,0 +1,21 @@
+{
+  "hyperparameters": {
+    "n_classes": 3,
+    "learning_rate": 0.2,
+    "batch_size": 128,
+    "max_epochs": 3,
+    "l2_lambda": 1.0,
+    "patience": 2,
+    "random_state": 42
+  },
+  "training_summary": {
+    "best_epoch": 2,
+    "actual_stop_epoch": 2,
+    "best_val_loss": null,
+    "n_epochs_fixed": 3,
+    "tuning_best_epoch_0idx": 2,
+    "train_val_n_observations": 738,
+    "note": "Retrained from scratch on Train+Val (738 obs) for exactly 3 epochs (= tuning best_epoch+1). No early stopping. Preprocessing artifacts unchanged."
+  },
+  "training_mode": "final_trainval"
+}
