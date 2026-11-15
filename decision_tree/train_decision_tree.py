@@ -101,14 +101,14 @@ def main() -> None:
             "val_macro_f1": f1_score(y_val, val_pred, average="macro"),
         })
     grid = pd.DataFrame(rows).sort_values(
-        ["val_accuracy", "val_macro_f1", "n_leaves"],
+        ["val_macro_f1", "val_accuracy", "n_leaves"],
         ascending=[False, False, True],
     )
     grid.to_csv(RESULTS_DIR / "validation_grid.csv", index=False)
-    print("\nTop 5 configurations by validation accuracy:")
+    print("\nTop 5 configurations by validation macro-F1:")
     print(grid.head(5).round(4).to_string(index=False))
 
-    # Ties are broken by validation macro-F1, then by the smaller tree.
+    # Ties are broken by validation accuracy, then by the smaller tree.
     best = grid.iloc[0]
     best_depth = None if best["max_depth"] == "unlimited" else int(best["max_depth"])
     best_leaf = int(best["min_samples_leaf"])

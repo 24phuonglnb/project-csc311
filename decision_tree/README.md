@@ -35,7 +35,7 @@ insensitive to feature scaling).
 1. **Grid search on the validation set** (trained on train only):
    `max_depth` in {2, 3, 4, 5, 7, 10, unlimited} x `min_samples_leaf` in {1, 2, 5, 10}.
    Criterion is Gini (scikit-learn default). Selection: highest validation
-   accuracy, ties broken by validation macro-F1, then by fewer leaves.
+   macro-F1, ties broken by validation accuracy, then by fewer leaves.
 2. **Retrain** the selected configuration on train + validation.
 3. **Evaluate once** on the internal test set. The test set is not used for any
    choice.
@@ -77,3 +77,6 @@ Observations:
   several points with a different split.
 - Grouped cross-validation is **not** implemented: the exported CSVs do not
   contain respondent IDs.
+- The saved joblib model requires scikit-learn and is not suitable for the final
+  submission if scikit-learn is prohibited. If the tree is selected, export its
+  structure and implement and verify inference using permitted dependencies.
