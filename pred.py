@@ -48,11 +48,10 @@ TOKEN_PATTERN = re.compile(r"(?u)\b\w\w+\b")  # scikit-learn TfidfVectorizer def
 
 
 def _find(name):
-    for directory in (HERE, HERE / "mlp_outputs"):
+    for directory in (HERE, HERE / "mlp_outputs", HERE / "mlp" / "mlp_outputs"):
         if (directory / name).exists():
             return directory / name
-    raise FileNotFoundError(f"{name} not found next to pred.py or in mlp_outputs/.")
-
+    raise FileNotFoundError(f"{name} not found next to pred.py, in mlp_outputs/, or in mlp/mlp_outputs/.")
 
 def normalize_missing(series):
     """Strip text and map heterogeneous missing markers to NaN."""
