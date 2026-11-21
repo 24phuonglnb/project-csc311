@@ -38,6 +38,9 @@ from sklearn.metrics import (accuracy_score, classification_report,
 from sklearn.preprocessing import StandardScaler
 from torch import nn
 
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pred
 
 SEED = 311
@@ -46,7 +49,7 @@ SELECTION_SEEDS = [1, 2, 3, 4, 5]
 # Seed for the single submitted model; fixed before any test evaluation.
 FINAL_SEED = SEED
 ROOT = Path(__file__).resolve().parent
-DATA_DIR = ROOT / "processed_data"
+DATA_DIR = ROOT.parent / "processed_data"
 OUTPUT_DIR = ROOT / "mlp_outputs"
 PREPROCESSING_PATH = OUTPUT_DIR / pred.PREPROCESSING_FILE
 BROAD_CONFIGS = 48
