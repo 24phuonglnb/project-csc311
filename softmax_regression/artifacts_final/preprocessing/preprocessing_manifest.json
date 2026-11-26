@@ -41,5 +41,7 @@
     "scaler": "scaler_params.npz",
     "multihot_vocab": "multihot_vocab.json",
     "tfidf": "tfidf_params.json"
-  }
+  },
+  "fitted_on": "Train+Val (738 observations)",
+  "note": "Preprocessing artifacts refit on Train+Val in retrain_final.py. TF-IDF uses index-based prefixes (text0\u2013text3) to avoid duplicate column names."
 }

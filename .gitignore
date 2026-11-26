@@ -1,13 +1,59 @@
-.DS_Store
+# Python bytecode
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+
+# Virtual environments
 .venv/
 venv/
+env/
 .env
 
-# Softmax Regression — generated outputs not tracked in Git
+# macOS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# pytest cache
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local Claude Code state
+.claude/
+
+# ---- Project-specific ----
+
+# Raw survey dataset (not re-distributed; too large for most repos)
+# csc311_project_training_202609.csv  # uncomment to ignore if desired
+
+# Processed feature CSVs (fully reproducible via data_explored.py)
+processed_data/
+
+# Softmax results: plots, large prediction dumps, training logs (see softmax_regression/.gitignore)
 softmax_regression/results/*.png
 softmax_regression/results/test_predictions.csv
+softmax_regression/results/final_test_predictions.csv
 softmax_regression/results/overfitting_analysis.txt
 softmax_regression/results/train_log.txt
+
+# Decision Tree: intermediate prediction CSVs
+decision_tree/results/test_clean_final.csv
+
+# MLP: intermediate experiment outputs (not the final model)
+mlp/mlp_outputs/cv_folds.csv
+mlp/mlp_outputs/mlp_cv_results.csv
+mlp/mlp_outputs/mlp_seed_stability.csv
+mlp/mlp_outputs/mlp_variant_summary.csv
+mlp/mlp_outputs/mlp_validation_results.csv
+
+# Submission packaging directory (not part of the codebase)
+submission_ready/

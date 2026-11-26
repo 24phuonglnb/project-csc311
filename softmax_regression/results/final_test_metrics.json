@@ -1,7 +1,7 @@
 {
   "model": "final (retrained on Train+Val)",
   "model_artifact": "softmax_regression/artifacts_final",
-  "dataset": "test_scaled.csv",
+  "dataset": "TV-refit test set",
   "n_observations_test": 132,
   "n_observations_trainval": 738,
   "n_features": 234,
@@ -13,10 +13,10 @@
     "l2_lambda": 1.0,
     "random_state": 42
   },
-  "test_cross_entropy": 0.5639690736084874,
-  "test_accuracy": 0.8787878787878788,
-  "test_macro_f1": 0.8795675868846601,
-  "test_weighted_f1": 0.87956758688466,
+  "test_cross_entropy": 0.562384384121967,
+  "test_accuracy": 0.8863636363636364,
+  "test_macro_f1": 0.8872314655447185,
+  "test_weighted_f1": 0.8872314655447185,
   "per_class": {
     "Baseball": {
       "precision": 0.8298,
@@ -25,15 +25,15 @@
       "support": 44
     },
     "Basketball": {
-      "precision": 0.8511,
+      "precision": 0.8696,
       "recall": 0.9091,
-      "f1": 0.8791,
+      "f1": 0.8889,
       "support": 44
     },
     "Soccer": {
-      "precision": 0.9737,
-      "recall": 0.8409,
-      "f1": 0.9024,
+      "precision": 0.9744,
+      "recall": 0.8636,
+      "f1": 0.9157,
       "support": 44
     }
   },

@@ -179,10 +179,10 @@ time).
 |---|---|
 | Training samples | 738 (Train + Val) |
 | Training epochs | 3 (fixed) |
-| Accuracy | **87.88%** |
-| Macro-F1 | **0.8796** |
-| Weighted-F1 | **0.8796** |
-| Cross-entropy | **0.5640** |
+| Accuracy | **88.64%** |
+| Macro-F1 | **0.8872** |
+| Weighted-F1 | **0.8872** |
+| Cross-entropy | **0.5624** |
 
 | Class | Precision | Recall | F1 | Support |
 |---|---|---|---|---|
