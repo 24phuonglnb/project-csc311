@@ -33,7 +33,7 @@ softmax_regression/
 │   ├── model_weights.npz
 │   ├── model_meta.json
 │   ├── feature_names.json
-│   └── preprocessing/      # Same preprocessing artifacts (copied from artifacts/)
+│   └── preprocessing/      # Preprocessing artifacts refitted on Train+Val (738 obs)
 │
 └── results/                # Generated outputs
     ├── best_config.json               # Best hyperparameter configuration
@@ -82,8 +82,8 @@ scratch** on the combined 738-sample Train+Val dataset for exactly
 **3 epochs** (= `best_epoch_ + 1`, the number of epochs at which the tuning
 run achieved its best validation checkpoint).  No validation split is used and
 no early stopping is applied.  The final model is saved to `artifacts_final/`.
-Preprocessing artifacts (scaler, TF-IDF, multi-hot, imputation) are **not
-refitted** — they remain trained on the original training split.
+Preprocessing artifacts (scaler, TF-IDF, multi-hot, imputation) are **refitted
+on the combined Train+Val dataset (738 observations)** before final training.
 
 The test set is never used during either tuning or retraining.
 
@@ -187,8 +187,8 @@ time).
 | Class | Precision | Recall | F1 | Support |
 |---|---|---|---|---|
 | Baseball | 0.8298 | 0.8864 | 0.8571 | 44 |
-| Basketball | 0.8511 | 0.9091 | 0.8791 | 44 |
-| Soccer | 0.9737 | 0.8409 | 0.9024 | 44 |
+| Basketball | 0.8696 | 0.9091 | 0.8889 | 44 |
+| Soccer | 0.9744 | 0.8636 | 0.9157 | 44 |
 
 ---
 
@@ -247,8 +247,10 @@ dL/db = (1/N) × Σ(P − Y_one_hot)
 
 Preprocessing parameters (scaler mean/scale, TF-IDF vocabulary and IDF weights,
 multi-hot vocabularies, imputation medians) are **fitted on the training split
-only** and saved in `artifacts/preprocessing/`.  They are reused unchanged
-during final retraining and inference.
+only** and saved in `artifacts/preprocessing/` (tuning checkpoint).  For the
+final model, they are **refitted on the combined Train+Val dataset (738 obs)**
+and saved in `artifacts_final/preprocessing/`.  Inference via `predict.py` uses
+the final preprocessing artifacts.
 
 ---
 

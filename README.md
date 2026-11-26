@@ -8,7 +8,7 @@ Three-class classification of student survey responses into **Soccer**, **Baseba
 
 - **Source:** `csc311_project_training_202609.csv`
 - **Size:** 870 observations, 290 unique respondents (3 observations per respondent — one per sport)
-- **Features:** 13 columns including free text, multi-select, Likert, and numerical fields
+- **Features:** 12 survey question columns (free text, multi-select, Likert, and numerical); `id` and `label` are excluded from model inputs
 - **Labels:** `Soccer`, `Baseball`, `Basketball` (balanced across respondents)
 
 ## Respondent-level train / validation / test split
@@ -168,7 +168,7 @@ project-csc311/
 
 ## Notes
 
-- Random seed: `42` throughout.
+- Random seed: `42` for the respondent-level split, Softmax random search, and Decision Tree. MLP final retraining uses seed `311`.
 - Respondent IDs are excluded from all model features.
 - Original label strings (`Soccer`, `Baseball`, `Basketball`) are preserved verbatim in all outputs.
 - The internal test split (44 respondents, 132 rows) is not used for any fitting or tuning decision.
